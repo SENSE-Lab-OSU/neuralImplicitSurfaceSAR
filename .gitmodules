@@ -1,0 +1,6 @@
+[submodule "externalLib/FRNN"]
+	path = externalLib/FRNN
+	url = https://github.com/lxxue/FRNN.git
+[submodule "externalLib/torch-batch-svd"]
+	path = externalLib/torch-batch-svd
+	url = https://github.com/KinglittleQ/torch-batch-svd.git
