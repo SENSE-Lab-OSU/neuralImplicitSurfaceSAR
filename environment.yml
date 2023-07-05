@@ -1,0 +1,29 @@
+name: iosPointsSAR
+channels:
+  - pytorch
+  - pytorch3d
+  - conda-forge
+  - bottler
+  - defaults
+  - pyg
+dependencies:
+  - python=3.8
+  - cudatoolkit=10.2
+  - pytorch::pytorch=1.8.0
+  - pytorch-cluster
+  - pytorch::torchvision
+  - fvcore
+  - jupyter
+  - scikit-image
+  - matplotlib
+  - imageio
+  - pytorch3d::pytorch3d
+  - pip
+  - tensorboard=1.15.0
+  - trimesh
+  - cython
+  - pyyaml
+  - pandas
+  - easydict
+  - nvidiacub
+
