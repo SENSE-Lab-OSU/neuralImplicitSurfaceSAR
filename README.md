@@ -9,8 +9,9 @@ The surface is iteratively refined and resampled to produce iso-points using res
 Yifan, Wang, Shihao Wu, Cengiz Oztireli, and Olga Sorkine-Hornung. "Iso-points: Optimizing neural implicit surfaces with hybrid representations." In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 374-383. 2021.
 
 # Installation instructions
-
+````bash 
 git clone --recursive https://github.com/SENSE-Lab-OSU/neuralImplicitSurfaceSAR.git
+
 cd neuralImplicitSurfaceSAR
 
 # conda environment and dependencies
