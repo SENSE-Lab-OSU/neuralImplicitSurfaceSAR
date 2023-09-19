@@ -37,3 +37,7 @@ python setup.py install
 # build DSS itself
 cd ../..
 python setup.py develop
+
+
+# Running the script
+python test_SAR_points_script.py data/cvdomes_l1_pointCloud/Sentra.ply --lambda_eikonal 3 --lambda_surface_sdf 4000 --lambda_surface_normal 5 --warm_up 500 --lambda_iso_normal 5 --denoise_normal --use_off_normal_loss -d sdf --lambda_iso_sdf 1000 --lambda_inter_sdf 100 --numberFrequencyFeatures 8 --totalIteration 30000 --resample_every 2000  -o experiments/sentra
