@@ -23,7 +23,7 @@ conda activate DSS
 
 # build additional dependencies of DSS
 # FRNN - fixed radius nearest neighbors
-cd external/FRNN/external
+cd FRNN
 git submodule update --init --recursive
 cd prefix_sum
 python setup.py install
