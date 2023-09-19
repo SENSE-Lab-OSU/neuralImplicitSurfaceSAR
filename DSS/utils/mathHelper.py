@@ -5,7 +5,7 @@ from torch_batch_svd import svd as batch_svd
 import scipy.sparse as sp
 from scipy.sparse.linalg import spsolve
 from pytorch3d.structures import Pointclouds
-from pytorch3d.loss.mesh_laplacian_smoothing import laplacian_cot
+from pytorch3d.ops import cot_laplacian 
 from pytorch3d.ops.utils import convert_pointclouds_to_tensor
 from pytorch3d.ops import knn_points
 from pytorch3d.ops.points_normals import _disambiguate_vector_directions

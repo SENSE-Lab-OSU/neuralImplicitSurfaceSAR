@@ -579,13 +579,13 @@ def get_surface_high_res_mesh(sdf, resolution=100, box_side_length=2.0, largest_
     z = z.astype(np.float32)
     if np.sign(z.min() * z.max()) >= 0:
         return trimesh.Trimesh([])
-    verts, faces, normals, values = measure.marching_cubes_lewiner(
+    verts, faces, normals, values = measure.marching_cubes(
         volume=z.reshape(grid['xyz'][1].shape[0], grid['xyz'][0].shape[0],
                          grid['xyz'][2].shape[0]).transpose([1, 0, 2]),
         level=0,
         spacing=(grid['xyz'][0][2] - grid['xyz'][0][1],
                  grid['xyz'][0][2] - grid['xyz'][0][1],
-                 grid['xyz'][0][2] - grid['xyz'][0][1]))
+                 grid['xyz'][0][2] - grid['xyz'][0][1]),method='lewiner')
 
     verts = verts + \
         np.array([grid['xyz'][0][0], grid['xyz'][1][0], grid['xyz'][2][0]])
@@ -632,13 +632,13 @@ def get_surface_high_res_mesh(sdf, resolution=100, box_side_length=2.0, largest_
 
         z = z.astype(np.float32)
 
-        verts, faces, normals, values = measure.marching_cubes_lewiner(
+        verts, faces, normals, values = measure.marching_cubes(
             volume=z.reshape(grid_aligned['xyz'][1].shape[0], grid_aligned['xyz'][0].shape[0],
                              grid_aligned['xyz'][2].shape[0]).transpose([1, 0, 2]),
             level=0,
             spacing=(grid_aligned['xyz'][0][2] - grid_aligned['xyz'][0][1],
                      grid_aligned['xyz'][0][2] - grid_aligned['xyz'][0][1],
-                     grid_aligned['xyz'][0][2] - grid_aligned['xyz'][0][1]))
+                     grid_aligned['xyz'][0][2] - grid_aligned['xyz'][0][1]),method='lewiner')
 
         verts = torch.from_numpy(verts).cuda().float()
         verts = torch.bmm(vecs.unsqueeze(0).repeat(verts.shape[0], 1, 1).transpose(1, 2),

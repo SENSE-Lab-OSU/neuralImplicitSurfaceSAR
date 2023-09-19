@@ -1,0 +1,7 @@
+Metadata-Version: 2.1
+Name: DSS
+Version: 1.0
+Summary: Differentiable Surface Splatter
+Author: Yifan Wang, Lixin Xue and Felice Serena
+License: MIT License
+License-File: LICENSE
