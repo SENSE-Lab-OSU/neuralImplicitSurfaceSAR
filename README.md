@@ -21,13 +21,22 @@ conda update -n base -c defaults conda
 conda env create --name DSS -f environment.yml
 conda activate DSS
 
+# setting up the compiler 
+conda install https://anaconda.org/brown-data-science/gcc/5.4.0/download/linux-64/gcc-5.4.0-0.tar.bz2
+cd ~/miniconda3/envs/DSS/lib
+# Find the latest c++ lib
+ls ~/miniconda3/envs/DSS3/lib | grep libstdc++.so
+# backup the libstc++
+mv libstdc++.so libstdc++.so.bak
+# link the latest file
+ln -s libstdc++.so.6.0.32 libstdc++.so.6
 # build additional dependencies of DSS
 # FRNN - fixed radius nearest neighbors
 cd FRNN
 git submodule update --init --recursive
-cd prefix_sum
+cd external/prefix_sum
 python setup.py install
-cd ../..
+cd ../../
 python setup.py install
 
 # build batch-svd

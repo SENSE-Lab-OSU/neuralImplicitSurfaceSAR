@@ -6,8 +6,7 @@ from pytorch3d.structures import Pointclouds as PytorchPointClouds
 from pytorch3d.structures import list_to_padded
 from pytorch3d.transforms import Transform3d, Scale, Rotate, Translate
 from pytorch3d.renderer.cameras import look_at_rotation
-from pytorch3d.renderer.utils import (
-    TensorProperties, convert_to_tensors_and_broadcast)
+from pytorch3d.renderer.utils import (TensorProperties, convert_to_tensors_and_broadcast)
 from ..utils.mathHelper import eps_denom, estimate_pointcloud_normals
 
 

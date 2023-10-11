@@ -27,11 +27,10 @@
 # --use_off_normal_loss
 # --numberFrequencyFeatures 7 
 # --totalIter 135000
-
+import torch
 from DSS.core.cloud import PointClouds3D
 import os
 import trimesh
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.autograd as autograd

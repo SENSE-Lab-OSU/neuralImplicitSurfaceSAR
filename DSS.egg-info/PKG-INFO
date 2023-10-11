@@ -5,3 +5,6 @@ Summary: Differentiable Surface Splatter
 Author: Yifan Wang, Lixin Xue and Felice Serena
 License: MIT License
 License-File: LICENSE
+Requires-Dist: numpy
+Requires-Dist: torch
+Requires-Dist: plyfile

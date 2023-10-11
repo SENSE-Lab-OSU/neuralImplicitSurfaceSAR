@@ -1,16 +1,15 @@
-name: iosPointsSAR
+name: DSS3
 channels:
   - pytorch
   - pytorch3d
   - conda-forge
   - bottler
   - defaults
-  - pyg
+  - plotly
 dependencies:
   - python=3.8
   - cudatoolkit=10.2
-  - pytorch::pytorch=1.8.0
-  - pytorch-cluster
+  - pytorch::pytorch=1.6.0
   - pytorch::torchvision
   - fvcore
   - jupyter
@@ -26,4 +25,6 @@ dependencies:
   - pandas
   - easydict
   - nvidiacub
-
+  - plotly
+  - pip:
+    - pymeshlab==0.1.8
