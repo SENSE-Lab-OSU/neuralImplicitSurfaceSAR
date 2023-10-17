@@ -16,20 +16,22 @@ DVR
 Lipman
 """
 
-""" value can be sdf / latent / rgb """
+""" value can be sdf / latent / rgb / Complex (real and imaginary) """
 
-_fields = ('sdf', 'latent', 'rgb', 'occupancy')
+_fields = ('sdf', 'latent', 'rgb', 'occupancy','Complex')
 _net_output = namedtuple("Result", _fields,
                          defaults=(None,) * len(_fields))
 
 
 def _validate_out_dims(out_dims: dict) -> None:
-    for k in out_dims.keys():
+    for k in out_dims.keys():   
         if k not in _fields:
             raise ValueError(
                 'out_dims contains at least one invalid key {} (valid keys are: {})'.format(k, _fields))
         if k in ('sdf', 'occupancy'):
             assert(out_dims[k] == 1)
+        elif k == 'Complex': # real and imaginary channels
+            assert(out_dims[k] == 2)
         elif k == 'rgb':
             assert(out_dims[k] == 3)
         else:
@@ -309,6 +311,99 @@ class SDF(BaseModel):
 
         return results
 
+class SDF_feature(BaseModel):
+    '''
+    Based on: https://github.com/facebookresearch/DeepSDF
+    and https://github.com/matanatz/SAL/blob/master/code/model/network.py
+    '''
+    def __init__(
+        self,
+        dim: int = 3,
+        out_dims: dict = dict(sdf=1),
+        feature_vector_size: int= 256,
+        hidden_size: int = 512,
+        n_layers: int = 8,
+        bias: float = 0.6,
+        weight_norm: bool = True,
+        skip_in=(4,),
+        num_frequencies=6,
+        **kwargs
+    ):
+        super().__init__(out_dims)
+        dims = [dim] + [hidden_size] * n_layers + [self.out_dim + feature_vector_size ]
+
+        self.embed_fn = None
+        if num_frequencies > 0:
+            embed_fn, input_ch = get_embedder(num_frequencies)
+            self.embed_fn = embed_fn
+            dims[0] = input_ch
+
+        self.dim = dims[0]
+        self.num_layers = len(dims)
+        self.skip_in = skip_in
+
+        for l in range(0, self.num_layers - 1):
+            if l + 1 in self.skip_in:
+                out_dim = dims[l + 1] - dims[0]
+            else:
+                out_dim = dims[l + 1]
+
+            lin = nn.Linear(dims[l], out_dim)
+
+            if l == self.num_layers - 2:
+                torch.nn.init.normal_(lin.weight, mean=np.sqrt(
+                    np.pi) / np.sqrt(dims[l]), std=0.0001)
+                torch.nn.init.constant_(lin.bias, -bias)
+            elif num_frequencies > 0 and l == 0:
+                torch.nn.init.constant_(lin.bias, 0.0)
+                torch.nn.init.constant_(lin.weight[:, 3:], 0.0)
+                torch.nn.init.normal_(
+                    lin.weight[:, :3], 0.0, np.sqrt(2) / np.sqrt(out_dim))
+            elif num_frequencies > 0 and l in self.skip_in:
+                torch.nn.init.constant_(lin.bias, 0.0)
+                torch.nn.init.normal_(
+                    lin.weight, 0.0, np.sqrt(2) / np.sqrt(out_dim))
+                torch.nn.init.constant_(lin.weight[:, -(dims[0] - 3):], 0.0)
+            else:
+                torch.nn.init.constant_(lin.bias, 0.0)
+                torch.nn.init.normal_(
+                    lin.weight, 0.0, np.sqrt(2) / np.sqrt(out_dim))
+
+            if weight_norm:
+                lin = nn.utils.weight_norm(lin)
+
+            setattr(self, "lin" + str(l), lin)
+
+        self.softplus = nn.Softplus(beta=100)
+
+    def forward(self, input, c=None, **kwargs):
+
+        if self.embed_fn is not None:
+            input = self.embed_fn(input)
+
+        x = input
+        if c is not None and c.numel() > 0:
+            assert(x.ndim == c.ndim)
+            x = torch.cat([c, x], dim=-1)
+
+        for l in range(0, self.num_layers - 1):
+            lin = getattr(self, "lin" + str(l))
+
+            if l in self.skip_in:
+                x = torch.cat([x, input], -1) / np.sqrt(2)
+
+            x = lin(x)
+
+            if l < self.num_layers - 2:
+                x = self.softplus(x)
+
+        x = F.tanh(x)
+        results = self._parse_output(x, scale_rgb=False)
+        if results.rgb is not None:
+            results = results._replace(rgb=torch.sigmoid(results.rgb))
+
+        return results
+
 
 class RenderingNetwork(BaseModel):
     def __init__(
@@ -348,10 +443,12 @@ class RenderingNetwork(BaseModel):
         self.relu = nn.ReLU()
         self.tanh = nn.Tanh()
 
-    def forward(self, x, c=None, **kwargs):
-        if c is not None and c.numel() > 0:
+    def forward(self, x, c=None,v=None,n=None, **kwargs):
+        if (c is not None) and (c.numel() > 0) and (v is not None) and (v.numel() >0) and (n is not None) and (n.numel() >0):
             assert(x.ndim == c.ndim)
-            x = torch.cat([c, x], dim=-1)
+            assert(v.ndim == x.ndim)
+            assert(n.ndim == x.ndim)
+            x = torch.cat([n,v,c, x], dim=-1)
 
         for l in range(0, self.num_layers - 1):
             lin = getattr(self, "lin" + str(l))
@@ -364,7 +461,22 @@ class RenderingNetwork(BaseModel):
         x = self.tanh(x)
         results = self._parse_output(x, scale_rgb=True)
         return results
-
+# Define the combined model
+class CombinedModel(BaseModel):
+  def __init__(self, sdf_feature, renderingNetwork):
+    super(CombinedModel, self).__init__()
+    self.sdf_feature = sdf_feature
+    self.renderingNetwork = renderingNetwork
+    
+  def forward(self, pts,viewVector,radarPosition):
+    # Apply the SDF_feature to the feature vectors
+    x1= pts
+    x2= viewVector
+    x = self.sdf_feature(x1)
+    # Apply the scattering network
+    x = self.renderingNetwork(x1,x2,x[1,1:])
+    return x
+    
 class ResnetBlockFC(nn.Module):
     ''' Fully connected ResNet Block class.
 
