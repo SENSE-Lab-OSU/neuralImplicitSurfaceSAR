@@ -452,12 +452,12 @@ class RenderingNetwork(BaseModel):
 
         self.relu = nn.ReLU()
         self.tanh = nn.Tanh()
-    def forward(self, x, c=None, **kwargs):
-        
+    def forward(self, pts=None,n=None,v=None, c=None, **kwargs):
+        input = torch.cat([pts, n,v], dim=-1)
         if self.embed_fn is not None:
-            x = self.embed_fn(x)
+            input = self.embed_fn(input)
 
-        
+        x = input
         if c is not None and c.numel() > 0:
             assert(x.ndim == c.ndim)
             x = torch.cat([c, x], dim=-1)

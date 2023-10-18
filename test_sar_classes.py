@@ -265,7 +265,6 @@ print(decoder1(gt_surface_pts_sub[0,0,:]).sdf)
 print(decoder2(gt_surface_pts_sub[0,0,:]).sdf)
 # %%
 uu=decoder2(gt_surface_pts_sub[0,0,:]).spatial_feature
-vv= torch.cat([gt_surface_pts_sub[0,0,:], gt_viewingVectors_sub[0,0,:],gt_surface_normals_sub[0,0,:]], dim=-1)
-temp=renderer(x = vv,c=uu).complex
+temp=renderer(pts=gt_surface_pts_sub[0,0,:] ,n=gt_surface_normals_sub[0,0,:],v=gt_viewingVectors_sub[0,0,:],c=uu).complex
 
 # %%
