@@ -16,12 +16,13 @@ DVR
 Lipman
 """
 
-""" value can be sdf / latent / rgb / Complex (real and imaginary) """
+""" value can be sdf / latent / rgb / complex (real and imaginary) """
 
-_fields = ('sdf', 'latent', 'rgb', 'occupancy','Complex')
+_fields = ('sdf', 'latent', 'rgb', 'occupancy','complex', 'spatial_feature')
+# _fields_updated = ('sdf', 'latent', 'rgb', 'occupancy','Complex', )
+
 _net_output = namedtuple("Result", _fields,
                          defaults=(None,) * len(_fields))
-
 
 def _validate_out_dims(out_dims: dict) -> None:
     for k in out_dims.keys():   
@@ -30,7 +31,7 @@ def _validate_out_dims(out_dims: dict) -> None:
                 'out_dims contains at least one invalid key {} (valid keys are: {})'.format(k, _fields))
         if k in ('sdf', 'occupancy'):
             assert(out_dims[k] == 1)
-        elif k == 'Complex': # real and imaginary channels
+        elif k == 'complex': # real and imaginary channels
             assert(out_dims[k] == 2)
         elif k == 'rgb':
             assert(out_dims[k] == 3)
@@ -47,8 +48,17 @@ class BaseModel(nn.Module):
         self._out_fields = tuple(out_dims.keys())
 
     def _parse_output(self, forward_result: torch.Tensor, scale_rgb=False) -> _net_output:
-        out_dict = dict(zip(self._out_fields, torch.split(
-            forward_result, self._out_dims, dim=-1)))
+        if forward_result.size()[0] > 1:
+            sdf = forward_result[0]
+            sptial_feature = forward_result[1:]
+            
+            out_dict = {
+                'sdf': sdf.unsqueeze(0),
+                'spatial_feature': sptial_feature
+            }
+        else:        
+            out_dict = dict(zip(self._out_fields, torch.split(
+                forward_result, self._out_dims, dim=-1)))
         if scale_rgb and 'rgb' in out_dict:
             # shift to [0, 1] or use sigmoid
             out_dict['rgb'] = (out_dict['rgb'] + 1) / 2.0
@@ -204,10 +214,10 @@ class Embedder:
         return torch.cat([fn(inputs) for fn in self.embed_fns], -1)
 
 
-def get_embedder(multires):
+def get_embedder(multires,input_dim=3):
     embed_kwargs = {
         'include_input': True,
-        'input_dims': 3,
+        'input_dims': input_dim,
         'max_freq_log2': multires - 1,
         'num_freqs': multires,
         'log_sampling': True,
@@ -424,9 +434,9 @@ class RenderingNetwork(BaseModel):
 
         self.embed_fn = None
         if num_frequencies > 0:
-            embedview_fn, input_ch = get_embedder(num_frequencies)
+            embedview_fn, input_ch = get_embedder(num_frequencies,input_dim=dim)
             self.embed_fn = embedview_fn
-            dims[0] += (input_ch - 3)
+            dims[0] += (input_ch-dim)
 
         self.dim = dims[0]
         self.num_layers = len(dims)
@@ -442,13 +452,15 @@ class RenderingNetwork(BaseModel):
 
         self.relu = nn.ReLU()
         self.tanh = nn.Tanh()
+    def forward(self, x, c=None, **kwargs):
+        
+        if self.embed_fn is not None:
+            x = self.embed_fn(x)
 
-    def forward(self, x, c=None,v=None,n=None, **kwargs):
-        if (c is not None) and (c.numel() > 0) and (v is not None) and (v.numel() >0) and (n is not None) and (n.numel() >0):
+        
+        if c is not None and c.numel() > 0:
             assert(x.ndim == c.ndim)
-            assert(v.ndim == x.ndim)
-            assert(n.ndim == x.ndim)
-            x = torch.cat([n,v,c, x], dim=-1)
+            x = torch.cat([c, x], dim=-1)
 
         for l in range(0, self.num_layers - 1):
             lin = getattr(self, "lin" + str(l))
@@ -460,21 +472,22 @@ class RenderingNetwork(BaseModel):
 
         x = self.tanh(x)
         results = self._parse_output(x, scale_rgb=True)
-        return results
+        return results    
+    
 # Define the combined model
 class CombinedModel(BaseModel):
-  def __init__(self, sdf_feature, renderingNetwork):
+  def __init__(self, decoder_params, scatteringNet_params):
     super(CombinedModel, self).__init__()
-    self.sdf_feature = sdf_feature
-    self.renderingNetwork = renderingNetwork
+    self.sdf_feature = SDF_feature(**decoder_params)
+    self.renderingNetwork = RenderingNetwork(**scatteringNet_params)
     
   def forward(self, pts,viewVector,radarPosition):
     # Apply the SDF_feature to the feature vectors
-    x1= pts
-    x2= viewVector
-    x = self.sdf_feature(x1)
+ 
+    x = self.sdf_feature(pts)
+    approximate_gradient(pts, self.sdf_feature, c=None, h=1e-5, requires_grad=False, **forward_kwargs)
     # Apply the scattering network
-    x = self.renderingNetwork(x1,x2,x[1,1:])
+    x = self.renderingNetwork(pts,viewVector,x[1,1:])
     return x
     
 class ResnetBlockFC(nn.Module):
@@ -601,7 +614,7 @@ class Occupancy(BaseModel):
         return results
 
 
-def approximate_gradient(points, network, c=None, h=1e-3, requires_grad=False, **forward_kwargs):
+def approximate_gradient(points, network, c=None, h=1e-5, requires_grad=False, **forward_kwargs):
     ''' Calculates the central difference for points.
 
     It approximates the derivative at the given points as follows:

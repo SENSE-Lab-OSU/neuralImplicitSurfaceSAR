@@ -39,7 +39,7 @@ import numpy as np
 import argparse
 from collections import defaultdict
 from DSS.utils.checkpointIO import CheckpointIO
-from DSS.models.common import Siren, SDF,RenderingNetwork,CombinedModel
+from DSS.models.common import Siren, SDF_feature,RenderingNetwork,CombinedModel
 from DSS.models.levelset_sampling import UniformProjection, EdgeAwareProjection
 from pytorch3d.ops import knn_points, knn_gather
 from DSS.utils import tolerating_collate, get_surface_high_res_mesh, scaler_to_color, valid_value_mask
@@ -300,7 +300,7 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
             'bias': 1.0,
             "num_frequencies": num_frequencies,
         }
-        decoder = SDF(**decoder_params)
+        decoder = SDF_feature(**decoder_params)
     else:
         raise ValueError
     scatteringNet_params = {
@@ -311,7 +311,7 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
         'n_layers': 4,
         "num_frequencies": 4,
     }
-    scatteringNet = RenderingNetwork(scatteringNet_params)
+    scatteringNet = RenderingNetwork(**scatteringNet_params)
     print(decoder)
     print(scatteringNet)
     
@@ -396,8 +396,8 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
 
             lambda_surface_sdf = 1e3
             lambda_surface_normal = 1e2
-            lambda_amps = 10
-            lambda_surface_sdf = kwargs['lambda_amps']
+            
+            lambda_amps = kwargs['lambda_amps']
             if kwargs['warm_up'] >= 0 and it >= kwargs['warm_up']:
                 lambda_surface_sdf = kwargs['lambda_surface_sdf']
                 lambda_surface_normal = kwargs['lambda_surface_normal']
@@ -407,7 +407,7 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
                 # generate iso surface
                 with torch.autograd.no_grad():
                     box_size = (object_bounding_sphere * 2 + 0.2, ) * 3
-                    imgs = plot_cuts(lambda x: decoder(x).sdf.squeeze().detach(),
+                    imgs = plot_cuts(lambda x: modelCombine.decoder(x).sdf.squeeze().detach(),
                                      box_size=box_size, max_n_eval_pts=10000, thres=0.0,
                                      imgs_per_cut=1, save_path=os.path.join(out_dir, '%010d_iso.html' % it))
                     mesh = get_surface_high_res_mesh(
@@ -417,7 +417,7 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
 
             if it % 2000 == 0:
                 checkpoint_io.save('model.pt', it=it)
-
+            # Predicting the surface normals pass it on to rendering network
             pred_surface_grad = gradient(gt_surface_pts.clone(), lambda x: modelCombine.decoder(x).sdf)
 
             # every once in a while update shape and points
@@ -430,11 +430,11 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
                     #     idx = fps(iso_points.view(-1,3), torch.zeros(iso_points.shape[1], dtype=torch.long, device=iso_points.device), shape.points.shape[1]/iso_points.shape[1])
                     #     iso_points = iso_points.view(-1,3)[idx].view(1,-1,3)
                     
-                    tempIso_points  = shape.get_iso_points(iso_points+0.01*(torch.rand_like(iso_points)-0.5), decoder, ear=kwargs['ear'], outlier_tolerance=kwargs['outlier_tolerance'])
+                    tempIso_points  = shape.get_iso_points(iso_points+0.01*(torch.rand_like(iso_points)-0.5), modelCombine.decoder, ear=kwargs['ear'], outlier_tolerance=kwargs['outlier_tolerance'])
                     print(f'shape of iso points {iso_points.shape},shape of iso points after projection {tempIso_points.shape} ')
                     if tempIso_points.shape[1] <12:
                         iso_points = shape.points
-                        tempIso_points  = shape.get_iso_points(iso_points+0.1*(torch.rand_like(iso_points)-0.5), decoder, ear=kwargs['ear'], outlier_tolerance=kwargs['outlier_tolerance'])
+                        tempIso_points  = shape.get_iso_points(iso_points+0.1*(torch.rand_like(iso_points)-0.5), modelCombine.decoder, ear=kwargs['ear'], outlier_tolerance=kwargs['outlier_tolerance'])
                         print(f'after resampling error the shape of iso points {iso_points.shape},shape of iso points after projection {tempIso_points.shape} ')
 
                     iso_points = tempIso_points.clone()
@@ -448,7 +448,7 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
 
                 
                 # TODO: use gradient from network or neighborhood?
-                iso_points_g = gradient(iso_points.clone(), lambda x: decoder(x).sdf)
+                iso_points_g = gradient(iso_points.clone(), lambda x: modelCombine.decoder(x).sdf)
                 if it == kwargs['warm_up'] or kwargs['resample_every'] > 0 and (it - kwargs['warm_up']) % 10000== 0:
                     save_ply(os.path.join(out_dir, '%010d_iso.ply' % it), iso_points.cpu().detach().view(-1,3), normals=iso_points_g.view(-1,3).detach().cpu())
 
@@ -469,7 +469,7 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
                 sample_idx = torch.randperm(iso_points.shape[1])[:min(batch_size, iso_points.shape[1])]
                 iso_points_sampled = iso_points.detach()[:, sample_idx, :]
                 
-                iso_points_sdf = decoder(iso_points_sampled.detach()).sdf
+                iso_points_sdf = modelCombine.decoder(iso_points_sampled.detach()).sdf
                 loss_iso_points_sdf = iso_points_sdf.abs().mean()* kwargs['lambda_iso_sdf'] * iso_points_sdf.nelement() / (iso_points_sdf.nelement()+8000)
                 loss['loss_sdf_iso'] = loss_iso_points_sdf.detach()
                 loss['loss'] += loss_iso_points_sdf
