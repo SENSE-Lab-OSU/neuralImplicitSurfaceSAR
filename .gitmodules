@@ -1,12 +1,4 @@
-[submodule "externalLib/FRNN"]
-	path = externalLib/FRNN
-	url = https://github.com/lxxue/FRNN.git
-[submodule "externalLib/torch-batch-svd"]
-	path = externalLib/torch-batch-svd
-	url = https://github.com/KinglittleQ/torch-batch-svd.git
-[submodule "FRNN"]
-	path = FRNN
-	url = https://github.com/lxxue/FRNN.git
-[submodule "torch-batch-svd"]
-	path = torch-batch-svd
-	url = https://github.com/KinglittleQ/torch-batch-svd.git
+[submodule "commons"]
+	path = commons
+	url = https://github.com/YuyiChang/standard-recipes.git
+	branch = ml
