@@ -13,6 +13,7 @@ RUN pip install fvcore iopath && pip install --no-index --no-cache-dir pytorch3d
 # install all other dependencies
 RUN pip install trimesh pyyaml pandas easydict plotly pymeshlab==0.1.8 jupyter scikit-image
 RUN pip install matplotlib pytorch-lightning plyfile
+RUN pip install h5py tensorboard
 
 # install torch-batch-svd
 RUN mkdir /user-app
