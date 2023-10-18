@@ -1,4 +1,6 @@
-### Background information 
+# Neural Implicit Surface SAR 
+
+## Background information 
 We utilize the Signed distance function (SDF) to represent the surface of objects. The SDF network is based on
 
 DeepSDF - Park, Jeong Joon, Peter Florence, Julian Straub, Richard Newcombe, and Steven Lovegrove. "Deepsdf: Learning continuous signed distance functions for shape representation." In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition, pp. 165-174. 2019.
@@ -8,7 +10,28 @@ The surface is iteratively refined and resampled to produce iso-points using res
 
 Yifan, Wang, Shihao Wu, Cengiz Oztireli, and Olga Sorkine-Hornung. "Iso-points: Optimizing neural implicit surfaces with hybrid representations." In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 374-383. 2021.
 
-# Installation instructions
+
+## Getting started
+
+### From docker
+
+Clone this repo
+
+```bash
+git clone --recursive https://github.com/SENSE-Lab-OSU/neuralImplicitSurfaceSAR.git
+```
+
+Start a docker container with environment setup
+
+```bash
+cd neuralImplicitSurfaceSAR
+./run_docker.sh
+```
+
+
+### Manual install
+<!-- # Installation instructions -->
+
 ````bash 
 git clone --recursive https://github.com/SENSE-Lab-OSU/neuralImplicitSurfaceSAR.git
 

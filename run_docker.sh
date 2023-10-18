@@ -4,7 +4,7 @@ MOUNT_OPS="-v $(pwd):/workspace"
 OPTS=""
 
 IMAGE="complex_sar"
-REMOTE_IMAGE="agilemelon/complex_sar:torch113-cuda118"
+REMOTE_IMAGE="agilemelon/complex_sar:base-torch1.13-cuda11.6"
 
 
 if [ $# -eq 0 ]; then
