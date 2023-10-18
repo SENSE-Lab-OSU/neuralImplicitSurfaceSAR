@@ -4,7 +4,7 @@ MOUNT_OPS="-v $(pwd):/workspace"
 OPTS=""
 
 IMAGE="complex_sar"
-REMOTE_IMAGE="agilemelon/complex_sar:torch113-cuda118"
+REMOTE_IMAGE="agilemelon/complex_sar:base-torch1.13-cuda11.6"
 
 
 if [ $# -eq 0 ]; then
@@ -14,7 +14,7 @@ elif [ "$1" = "local" ]; then
 elif [ "$1" = "cpu" ]; then
     docker run -it --rm $MOUNT_OPS $OPTS $IMAGE
 elif [ "$1" = "build" ]; then
-    docker build -t $IMAGE -f docker/Dockerfile .
+    docker build -t $IMAGE -f dockers/Dockerfile dockers
 else
     echo "Unknown argument: $1"
 fi
