@@ -163,7 +163,7 @@ class UniformProjection(LevelSetProjection):
                         network_eval), retain_graph=False)[0]
 
                 grad_packed.append(input_grad)
-                eval_packed.append(network_eval)
+                eval_packed.append(network_eval.squeeze())
 
             grad_packed = torch.cat(grad_packed, dim=0).view(shp)
             eval_packed = torch.cat(eval_packed, dim=0).view(shp[:-1])

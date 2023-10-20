@@ -247,10 +247,13 @@ decoder1 = SDF(**decoder_params)
 
 decoder2 = SDF_feature(**decoder_params)
 renderer = RenderingNetwork(**scatteringNet_params)
+combinedModel1 = CombinedModel(decoder_params,scatteringNet_params)
 print(decoder1)
 
 print(decoder1) 
 print(renderer)
+
+
 
 sub_idx = torch.randperm(gt_surface_normals_all.shape[1])[:20000]
 gt_surface_pts_sub = torch.index_select(gt_surface_pts_all, 1, sub_idx).to(device=device)
@@ -261,10 +264,34 @@ gt_viewingVectors_sub = torch.index_select(gt_viewingVectors_all, 1, sub_idx).to
 
 decoder1 = decoder1.to(device)
 decoder2 = decoder2.to(device)
-print(decoder1(gt_surface_pts_sub[0,0,:]).sdf)
-print(decoder2(gt_surface_pts_sub[0,0,:]).sdf)
-# %%
-uu=decoder2(gt_surface_pts_sub[0,0,:]).spatial_feature
-temp=renderer(pts=gt_surface_pts_sub[0,0,:] ,n=gt_surface_normals_sub[0,0,:],v=gt_viewingVectors_sub[0,0,:],c=uu).complex
+combinedModel1 = combinedModel1.to(device)
+#print(decoder1(gt_surface_pts_sub[0,0,:]).sdf)
+#print(decoder2(gt_surface_pts_sub[0,0,:]).sdf)
+# %% loading  a batch
+iterloader = iter(data_loader)
+batch = next(iterloader)
+
+gt_combinedInput, gt_combinedOutput = batch
+gt_combinedInput.unsqueeze_(0)
+gt_combinedOutput.unsqueeze_(0)
+gt_combinedInput = gt_combinedInput.to(device=device).detach()
+gt_combinedOutput = gt_combinedOutput.to(device=device).detach()
+
+gt_surface_pts,gt_viewVector = torch.split(gt_combinedInput,3,dim=-1)
+gt_surface_normals,gt_surface_amps = torch.split(gt_combinedOutput,3,dim=-1)
+
+
+# %% testing gradient and normal 
+x= combinedModel1.sdf_feature(gt_surface_pts)
+
+# x = decoder2(gt_surface_pts).sdf
+# y = decoder2(gt_surface_pts).spatial_feature
 
 # %%
+box_size = (object_bounding_sphere * 2 + 0.2, ) * 3
+imgs = plot_cuts(lambda x: combinedModel1.sdf_feature(x).sdf.squeeze().detach(),
+            box_size=box_size, max_n_eval_pts=10000, thres=0.0,
+            imgs_per_cut=1, save_path='/research/nfs_ertin_1/nithin_data/test.png')
+mesh = get_surface_high_res_mesh( lambda x: combinedModel1.sdf_feature(x).sdf.squeeze(), resolution=180)
+mesh.apply_transform(scale_mat_inv)
+#%%

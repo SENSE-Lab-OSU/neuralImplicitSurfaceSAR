@@ -48,13 +48,18 @@ class BaseModel(nn.Module):
         self._out_fields = tuple(out_dims.keys())
 
     def _parse_output(self, forward_result: torch.Tensor, scale_rgb=False) -> _net_output:
-        if forward_result.size()[0] > 1:
-            sdf = forward_result[0]
-            sptial_feature = forward_result[1:]
+        if forward_result.size()[-1] > 2:
+            sdf = forward_result[:,:,0]
+            sptial_feature = forward_result[:,:,1:]
             
             out_dict = {
-                'sdf': sdf.unsqueeze(0),
+                'sdf': sdf,
                 'spatial_feature': sptial_feature
+            }
+        elif forward_result.size()[-1] ==2:
+            complexVal = forward_result
+            out_dict = {
+                'complex': complexVal
             }
         else:        
             out_dict = dict(zip(self._out_fields, torch.split(
@@ -387,10 +392,11 @@ class SDF_feature(BaseModel):
         self.softplus = nn.Softplus(beta=100)
 
     def forward(self, input, c=None, **kwargs):
-
+        if input.shape[0] > 1:
+            input = input.unsqueeze(0)
         if self.embed_fn is not None:
             input = self.embed_fn(input)
-
+        
         x = input
         if c is not None and c.numel() > 0:
             assert(x.ndim == c.ndim)
@@ -408,6 +414,7 @@ class SDF_feature(BaseModel):
                 x = self.softplus(x)
 
         x = F.tanh(x)
+        
         results = self._parse_output(x, scale_rgb=False)
         if results.rgb is not None:
             results = results._replace(rgb=torch.sigmoid(results.rgb))
@@ -471,23 +478,28 @@ class RenderingNetwork(BaseModel):
                 x = self.relu(x)
 
         x = self.tanh(x)
-        results = self._parse_output(x, scale_rgb=True)
+        results = self._parse_output(x, scale_rgb=False)
         return results    
     
 # Define the combined model
-class CombinedModel(BaseModel):
+class CombinedModel(nn.Module):
   def __init__(self, decoder_params, scatteringNet_params):
-    super(CombinedModel, self).__init__()
+    super().__init__()
+    #super(CombinedModel, self).__init__(out_dims)
     self.sdf_feature = SDF_feature(**decoder_params)
     self.renderingNetwork = RenderingNetwork(**scatteringNet_params)
     
-  def forward(self, pts,viewVector,radarPosition):
+  def forward(self, pts,viewVector):
+    forward_kwargs = {
+        'pts': pts,
+        'c': None,
+    }  
     # Apply the SDF_feature to the feature vectors
- 
-    x = self.sdf_feature(pts)
-    approximate_gradient(pts, self.sdf_feature, c=None, h=1e-5, requires_grad=False, **forward_kwargs)
+    x_sdf = self.sdf_feature(pts).sdf
+    spatial_feature = self.sdf_feature(pts).spatial_feature
+    n = gradient(pts, lambda x: self.sdf_feature(x).sdf)
     # Apply the scattering network
-    x = self.renderingNetwork(pts,viewVector,x[1,1:])
+    x = self.renderingNetwork(pts = pts,n=n,v=viewVector, c=spatial_feature).complex
     return x
     
 class ResnetBlockFC(nn.Module):
@@ -613,6 +625,12 @@ class Occupancy(BaseModel):
             return results.rgb
         return results
 
+def gradient(points, net):
+    points.requires_grad_(True)
+    sdf_value = net(points)
+    grad = torch.autograd.grad(sdf_value, [points], [
+        torch.ones_like(sdf_value)], create_graph=True)[0]
+    return grad
 
 def approximate_gradient(points, network, c=None, h=1e-5, requires_grad=False, **forward_kwargs):
     ''' Calculates the central difference for points.
