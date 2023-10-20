@@ -593,7 +593,7 @@ def get_surface_high_res_mesh(sdf, resolution=100, box_side_length=2.0, largest_
     mesh_low_res = trimesh.Trimesh(verts, faces, normals)
 
     components = mesh_low_res.split(only_watertight=False)
-    areas = np.array([c.area for c in components], dtype=np.float)
+    areas = np.array([c.area for c in components], dtype=np.float32)
     mesh_low_res = components[areas.argmax()]
 
     recon_pc = trimesh.sample.sample_surface(mesh_low_res, 10000)[0]
@@ -649,7 +649,7 @@ def get_surface_high_res_mesh(sdf, resolution=100, box_side_length=2.0, largest_
 
     if largest_component:
         components = meshexport.split(only_watertight=False)
-        areas = np.array([c.area for c in components], dtype=np.float)
+        areas = np.array([c.area for c in components], dtype=np.float32)
         meshexport = components[areas.argmax()]
 
     return meshexport
