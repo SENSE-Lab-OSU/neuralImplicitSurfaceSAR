@@ -1,6 +1,7 @@
 #Remove Data folder recursively for exclusions to apply
 data/*
 experiments/*
+runs/*
 
 #skip any README, .py or .gitkeep
 !*README*
