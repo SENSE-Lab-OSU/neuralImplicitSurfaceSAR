@@ -498,63 +498,83 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(
-        description='Train from DTU point clouds'
-    )
-    parser.add_argument('pcl_file', type=str, nargs=1,
-                        default='/home/mnt/points/data/DTU_MVS/Points_in_Mask/furu/scan106.ply',
-                        help='Path to point cloud file.')
-    parser.add_argument('--out_dir', '-o', type=str,
-                        nargs='?', help='Directory for output.')
-    parser.add_argument('--use_sal_loss', action='store_true',
-                        help='Use Distance value.')
-    parser.add_argument('--use_off_normal_loss', action='store_true',
-                        help='penalize flipped normal outside the shape.')
-    parser.add_argument('--resume', action='store_true',
-                        help='resume training.')
-    parser.add_argument('--decoder', '-d', type=str, nargs=1, default=['siren'], choices=['siren', 'sdf'],
-                        help='Decoder type.')
-    parser.add_argument('--warm_up', type=int, action=FooAction, default=500)
-    parser.add_argument('--weight_mode', type=int, action=FooAction, default=1, dest='w', choices=[1, 2, 3, -1])
-    parser.add_argument('--resample_every', type=int, action=FooAction, dest='i',default=2000)
-    parser.add_argument('--ear', action='store_true')
-    parser.add_argument('--denoise_normal', action='store_true')
-    parser.add_argument('--outlier_tolerance', type=float, action=FooAction, default=0.1)
-    parser.add_argument('--lambda_eikonal', type=float, action=FooAction, dest='eik', default=5e1)
-    parser.add_argument('--lambda_iso_sdf', type=float, action=FooAction, dest='isoSDF', default=1e3)
-    parser.add_argument('--lambda_iso_normal', type=float, action=FooAction, dest='isoN', default=1e2)
-    parser.add_argument('--lambda_surface_sdf', type=float, action=FooAction, dest='onSDF', default=1e3)
-    parser.add_argument('--lambda_inter_sdf', type=float, action=FooAction, dest='offSDF', default=1e2)
-    parser.add_argument('--lambda_inter_sal', type=float, action=FooAction, dest='offSal', default=10)
-    parser.add_argument('--lambda_surface_normal', type=float, action=FooAction, dest='onN', default=1e2)
-    parser.add_argument('--numberFrequencyFeatures',type=int,action=FooAction,dest='FourierFeatures',default=6)
-    parser.add_argument('--totalIteration',type=int,action=FooAction,dest='totalIter',default=20000)
-    args = parser.parse_args()
+    # parser = argparse.ArgumentParser(
+    #     description='Train from DTU point clouds'
+    # )
+    # parser.add_argument('pcl_file', type=str, nargs=1,
+    #                     default='/home/mnt/points/data/DTU_MVS/Points_in_Mask/furu/scan106.ply',
+    #                     help='Path to point cloud file.')
+    # parser.add_argument('--out_dir', '-o', type=str,
+    #                     nargs='?', help='Directory for output.')
+    # parser.add_argument('--use_sal_loss', action='store_true',
+    #                     help='Use Distance value.')
+    # parser.add_argument('--use_off_normal_loss', action='store_true',
+    #                     help='penalize flipped normal outside the shape.')
+    # parser.add_argument('--resume', action='store_true',
+    #                     help='resume training.')
+    # parser.add_argument('--decoder', '-d', type=str, nargs=1, default=['siren'], choices=['siren', 'sdf'],
+    #                     help='Decoder type.')
+    # parser.add_argument('--warm_up', type=int, action=FooAction, default=500)
+    # parser.add_argument('--weight_mode', type=int, action=FooAction, default=1, dest='w', choices=[1, 2, 3, -1])
+    # parser.add_argument('--resample_every', type=int, action=FooAction, dest='i',default=2000)
+    # parser.add_argument('--ear', action='store_true')
+    # parser.add_argument('--denoise_normal', action='store_true')
+    # parser.add_argument('--outlier_tolerance', type=float, action=FooAction, default=0.1)
+    # parser.add_argument('--lambda_eikonal', type=float, action=FooAction, dest='eik', default=5e1)
+    # parser.add_argument('--lambda_iso_sdf', type=float, action=FooAction, dest='isoSDF', default=1e3)
+    # parser.add_argument('--lambda_iso_normal', type=float, action=FooAction, dest='isoN', default=1e2)
+    # parser.add_argument('--lambda_surface_sdf', type=float, action=FooAction, dest='onSDF', default=1e3)
+    # parser.add_argument('--lambda_inter_sdf', type=float, action=FooAction, dest='offSDF', default=1e2)
+    # parser.add_argument('--lambda_inter_sal', type=float, action=FooAction, dest='offSal', default=10)
+    # parser.add_argument('--lambda_surface_normal', type=float, action=FooAction, dest='onN', default=1e2)
+    # parser.add_argument('--numberFrequencyFeatures',type=int,action=FooAction,dest='FourierFeatures',default=6)
+    # parser.add_argument('--totalIteration',type=int,action=FooAction,dest='totalIter',default=20000)
+    # args = parser.parse_args()
     torch.cuda.set_device(0) #currently using GPU-0
-    pcl_file = args.pcl_file[0]
-    decoder = args.decoder[0]
-    use_sal_loss = args.use_sal_loss
-    use_off_normal_loss = args.use_off_normal_loss
-    out_dir = args.out_dir
-    resume = args.resume
-    warm_up = args.warm_up
-    ear = args.ear
-    num_frequencies = args.FourierFeatures
-    totalIter = args.totalIter
-    if out_dir is None:
-        out_dir = os.path.join('exp', 'points_3d_outputs',
-                               os.path.basename(pcl_file).split('.')[0])
-        check_opts = ["eik","isoSDF","isoN","onSDF","offSDF","offSal","onN","i","w"]
-        for opt_name in check_opts:
-            if hasattr(args, opt_name+'_nondefault'):
-                out_dir += '_'+opt_name+str(getattr(args, opt_name))
+    pcl_file =  '/research/nfs_ertin_1/nithin_data/3D_SAR/neuralImplicitSurfaceSAR/data/cvdomes_l1_pointCloud//Camry.ply'
+    decoder = 'sdf'
+    use_sal_loss = False
+    use_off_normal_loss = True
+    out_dir = '/research/nfs_ertin_1/nithin_data/3D_SAR/neuralImplicitSurfaceSAR/experiments/Camry_test'
+    resume = False
+    warm_up = 500
+    ear = True
+    weight_mode = 1
+    num_frequencies = 8
+    totalIter = 30000
+    lam_eik = 3
+    isoSDF = 1000
+    isoN = 5
+    onSDF = 3000
+    outlier_tolerance = 0.1
+    offSDF = 100
+    onN = 5
+    offSal = 20
+    denoise_normal = True
+    amps = 0
+    amps_iso = 0
+    amps_off = 0
+    resample_every = 2000
     
     run(pcl_file, out_dir, decoder_type=decoder,
         use_sal_loss=use_sal_loss, use_off_normal_loss=use_off_normal_loss,
-        resume=resume, warm_up=warm_up, weight_mode=args.w, resample_every=args.i,
+        resume=resume, warm_up=warm_up, weight_mode=weight_mode, resample_every=resample_every,
         ear=ear,
-        lambda_eikonal=args.eik, lambda_iso_sdf=args.isoSDF, lambda_iso_normal=args.isoN,
-        lambda_surface_sdf=args.onSDF, lambda_surface_normal=args.onN,
-        lambda_inter_sdf=args.offSDF, lambda_inter_sal=args.offSal,
-        outlier_tolerance=args.outlier_tolerance, denoise_normal=args.denoise_normal,num_frequencies=num_frequencies,
+        lambda_eikonal=lam_eik, lambda_iso_sdf=isoSDF, lambda_iso_normal=isoN,
+        lambda_surface_sdf=onSDF, lambda_surface_normal=onN,
+        lambda_inter_sdf=offSDF, lambda_inter_sal=offSal,
+        outlier_tolerance=outlier_tolerance, denoise_normal=denoise_normal,num_frequencies=num_frequencies,
         totalIter = totalIter)
+# CV-Domes Full
+# --lambda_eikonal 3
+# --warm_up 500 
+# --resample_every 2000
+# --lambda_surface_sdf 4000 
+# --lambda_surface_normal 5
+# --lambda_iso_sdf 1000
+# --lambda_iso_normal 5
+# --lambda_inter_sdf 100
+# --denoise_normal
+# --use_off_normal_loss
+# --numberFrequencyFeatures 8
+# --totalIter 30000

@@ -1,32 +1,3 @@
-# parameters used 
-# CV-Domes Full
-# --lambda_eikonal 3
-# --warm_up 500 
-# --resample_every 2000
-# --lambda_surface_sdf 4000 
-# --lambda_surface_normal 5
-# --lambda_iso_sdf 1000
-# --lambda_iso_normal 5
-# --lambda_inter_sdf 100
-# --denoise_normal
-# --use_off_normal_loss
-# --numberFrequencyFeatures 8
-# --totalIter 30000
-
-
-# Gotcha Parking Lot full 
-# --lambda_eikonal 7
-# --warm_up 500 
-# --resample_every 1000
-# --lambda_surface_sdf 1200 
-# --lambda_surface_normal 20
-# --lambda_iso_sdf 200
-# --lambda_iso_normal 5
-# --lambda_inter_sdf 100
-# --denoise_normal
-# --use_off_normal_loss
-# --numberFrequencyFeatures 7 
-# --totalIter 135000
 #%%
 from DSS.core.cloud import PointClouds3D
 import os
@@ -59,6 +30,11 @@ set_deterministic_()
 
 import argparse
 #%% load file module 
+class FooAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, values)
+        setattr(namespace, self.dest+'_nondefault', True)
+
 def load_data_cvdomes(filepath):
     with h5py.File(filepath) as f:
     # read the complex-valued amplitudes used in the image
@@ -74,32 +50,27 @@ def load_data_cvdomes(filepath):
         data_of_interest = np.array(f['viewVector'][:],dtype=np.float32)
         viewVector = data_of_interest   
     return amps,points,normals,viewVector
-#%%
-class FooAction(argparse.Action):
-    def __call__(self, parser, namespace, values, option_string=None):
-        setattr(namespace, self.dest, values)
-        setattr(namespace, self.dest+'_nondefault', True)
 
 class Shape(object):
     """
     docstring
     """
     pass
+
     def __init__(self, points, n_points, normals=None):
         super().__init__()
         B, P, _ = points.shape
         assert(B==1)
         self.projection = UniformProjection(
-            proj_max_iters=10, proj_tolerance=1e-6, total_iters=1, sample_iters=5, knn_k=16)
+            proj_max_iters=10, proj_tolerance=1e-5, total_iters=3, sample_iters=5, knn_k=16)
         self.ear_projection = EdgeAwareProjection(proj_max_iters=10, knn_k=16,
-            proj_tolerance=1e-6, total_iters=2, resampling_clip=0.02, sample_iters=2, repulsion_mu=0.4,
+            proj_tolerance=1e-5, total_iters=3, resampling_clip=0.02, sample_iters=2, repulsion_mu=0.4,
             sharpness_angle=20, edge_sensitivity=1.0)
         rnd_idx = torch.randperm(P)[:n_points]
         points = points.view(-1, 3)[rnd_idx].view(1, -1, 3)
         if normals is not None:
             normals = normals.view(-1, 3)[rnd_idx].view(1, -1, 3)
-        self.points = resample_uniformly(PointClouds3D(points, normals=normals), shrink_ratio=0.25,
-            repulsion_mu=0.65, neighborhood_size=31).points_padded()
+        self.points = resample_uniformly(PointClouds3D(points, normals=normals), shrink_ratio=0.25, repulsion_mu=0.65, neighborhood_size=31).points_padded()
 
     def get_iso_points(self, points, sdf_net, ear=False, outlier_tolerance=0.01):
         if not ear:
@@ -108,7 +79,6 @@ class Shape(object):
             # first resample uniformly
             projection = self.ear_projection
         with autograd.no_grad():
-            print(points.shape)
             proj_results = projection.project_points(points.view(1, -1, 3), sdf_net)
             mask_iso = proj_results['mask'].view(1, -1)
             iso_points = proj_results['levelset_points'].view(1, -1, 3)
@@ -139,6 +109,8 @@ def get_iso_bilateral_weights(points, normals, iso_points, iso_normals):
         breakpoint()
     return weight
 
+
+
 def get_laplacian_weights(points, normals, iso_points, iso_normals, neighborhood_size=8):
     """
     compute distance based on iso local neighborhood
@@ -158,8 +130,7 @@ def get_laplacian_weights(points, normals, iso_points, iso_normals, neighborhood
         spatial_w[idxs.view_as(spatial_w)<0] = 0
     return spatial_w.view(points.shape[:-1])
 
-def get_heat_kernel_weights(points, normals, iso_points, iso_normals, neighborhood_size=8, 
-    sigma_p=0.4, sigma_n=0.7):
+def get_heat_kernel_weights(points, normals, iso_points, iso_normals, neighborhood_size=8, sigma_p=0.4, sigma_n=0.7):
     """
     find closest k points, compute point2face distance, and normal distance
     """
@@ -218,6 +189,7 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
 
     device = torch.device('cuda:0') #currently using GPU-0
     writer = SummaryWriter() # plotting loss functions on tensorboard
+    
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 
@@ -227,6 +199,7 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
    
     amps=amps.T
     amps = amps/np.max(abs(amps))
+    
     pcl = trimesh.Trimesh(
         vertices=points , vertex_normals=normals, process=False)
     pcl.export(os.path.join(out_dir, "input_pcl.ply"), vertex_normal=True)
@@ -253,15 +226,16 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
         torch.from_numpy(combinredInput), torch.from_numpy(combinredOutput))
     # The batch-size is kept as total number of points /3. 
     # This should be reduced for larger scenes to fit in the GPU memory
-    batch_size = 512 #points.shape[0]//3
+    batch_size = 4096
     
     data_loader = torch.utils.data.DataLoader(
         dataset, batch_size=batch_size, num_workers=1, shuffle=True,
         collate_fn=tolerating_collate,
     )
+    
     gt_surface_pts_all = torch.from_numpy(points).unsqueeze(0).float()
     #gt_viewingVectors_all = torch.from_numpy(viewVector).unsqueeze(0).float()
-    #gt_amps_all = torch.from_numpy(amps).unsqueeze(0)
+    gt_amps_all = torch.from_numpy(np.sum(np.abs(amps),axis=-1)).float()
     gt_surface_normals_all = torch.from_numpy(normals).unsqueeze(0).float()
     gt_surface_normals_all = F.normalize(gt_surface_normals_all, dim=-1)
 
@@ -294,8 +268,8 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
         decoder_params = {
             'dim': 3,
             "out_dims": {'sdf': 1},
-            "c_dim": 0,
-            "feature_vector_size":  256,
+            "c_dim": 32,
+            "feature_vector_size":  32,
             "hidden_size": 512,
             'n_layers': 9,
             'bias': 1.0,
@@ -307,9 +281,9 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
     scatteringNet_params = {
         'dim': 9,
         "out_dims": {'complex': 2},
-        "c_dim": 256,
+        "c_dim": 32,
         "hidden_size": 512,
-        'n_layers': 4,
+        'n_layers': 6,
         "num_frequencies": 4,
     }
     
@@ -320,21 +294,26 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
     
     modelCombine = CombinedModel(decoder_params,scatteringNet_params)
     modelCombine = modelCombine.to(device)
+    modelCombine.sdf_feature = modelCombine.sdf_feature.to(device)
+    modelCombine.renderingNetwork = modelCombine.renderingNetwork.to(device)
+    
     # training
     total_iter = totalIter
     optimizer = torch.optim.Adam([
                 {'params': modelCombine.sdf_feature.parameters()},
-                {'params': modelCombine.renderingNetwork.parameters(), 'lr': 1e-4}
+                {'params': modelCombine.renderingNetwork.parameters()}
             ], lr=1e-4)
-    #optimizer = torch.optim.Adam(decoder.parameters(), lr=1e-4)
+    # optimizer = torch.optim.Adam(decoder.parameters(), lr=1e-4)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, 
-                [total_iter//3, total_iter//2], gamma=0.5)
+                [2*total_iter//3, 3*total_iter//4], gamma=0.5)
 
-
-    shape = Shape(gt_surface_pts_all.cuda(), n_points=gt_surface_pts_all.shape[1]//10, 
-                normals=gt_surface_normals_all.cuda())
+    # values, indexes = torch.topk(gt_amps_all,1024)
+    # gt_surface_pts_sub_shape = torch.index_select(gt_surface_pts_all, 1, indexes).to(device=device)
+    # gt_surface_normals_sub_shape = torch.index_select(gt_surface_normals_all, 1, indexes).to(device=device)
+    shape = Shape(gt_surface_pts_all.cuda(), n_points=gt_surface_pts_all.shape[1]//35, normals=gt_surface_normals_all.cuda())
    
     checkpoint_io = CheckpointIO(out_dir, model=modelCombine, optimizer=optimizer)
+    #checkpoint_io = CheckpointIO(out_dir, model=decoder, optimizer=optimizer)
     load_dict = dict()
     if resume:
         models_avail = [f for f in os.listdir(out_dir) if f[-3:] == '.pt']
@@ -380,18 +359,13 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
             checkpoint_io.save('model_{:04d}.pt'.format(it), it=it)
             mesh = get_surface_high_res_mesh(
                 lambda x: modelCombine.sdf_feature(x).sdf.squeeze(), resolution=512)
+            # mesh = get_surface_high_res_mesh(
+            #     lambda x: decoder.sdf_feature(x).sdf.squeeze(), resolution=512)
             mesh.apply_transform(scale_mat_inv)
             mesh.export(os.path.join(out_dir, "final.ply"))
             break
 
         for batch in data_loader:
-
-            # gt_surface_pts, gt_surface_normals = batch
-            # gt_surface_pts.unsqueeze_(0)
-            # gt_surface_normals.unsqueeze_(0)
-            # gt_surface_pts = gt_surface_pts.to(device=device).detach()
-            # gt_surface_normals = gt_surface_normals.to(
-            #     device=device).detach()
             gt_combinedInput, gt_combinedOutput = batch
             gt_combinedInput.unsqueeze_(0)
             gt_combinedOutput.unsqueeze_(0)
@@ -404,16 +378,23 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
                 gt_combinedInput,3,dim=-1)
             gt_surface_normals,gt_surface_amps = torch.split(
                 gt_combinedOutput,3,dim=-1)
+            
+            gt_surface_pts = gt_surface_pts.to(device=device).detach()
+            gt_surface_normals = gt_surface_normals.to(device=device).detach()
+            gt_viewVector = gt_viewVector.to(device=device).detach()
+            gt_surface_amps = gt_surface_amps.to(device=device).detach()   
+                     
             optimizer.zero_grad()
             
             modelCombine.train()
             modelCombine.sdf_feature.train()
             modelCombine.renderingNetwork.train()
+            # decoder.train()
             
             loss = defaultdict(float)
 
-            lambda_surface_sdf = 1e3
-            lambda_surface_normal = 1e2
+            lambda_surface_sdf =  kwargs['lambda_surface_sdf_warmup'] #5e2
+            lambda_surface_normal =  kwargs['lambda_surface_normal_warmup'] #5e1 
             
             lambda_surface_amps = kwargs['lambda_amps']
             lambda_surfaceISO_amps = kwargs['lambda_amps_iso']
@@ -431,8 +412,13 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
                     imgs = plot_cuts(lambda x: modelCombine.sdf_feature(x).sdf.squeeze().detach(),
                                      box_size=box_size, max_n_eval_pts=10000, thres=0.0,
                                      imgs_per_cut=1, save_path=os.path.join(out_dir, '%010d_iso.html' % it))
+                    # imgs = plot_cuts(lambda x: decoder(x).sdf.squeeze().detach(),
+                    #                  box_size=box_size, max_n_eval_pts=10000, thres=0.0,
+                    #                  imgs_per_cut=1, save_path=os.path.join(out_dir, '%010d_iso.html' % it))
                     mesh = get_surface_high_res_mesh(
                         lambda x: modelCombine.sdf_feature(x).sdf.squeeze(), resolution=180)
+                    # mesh = get_surface_high_res_mesh(
+                    #     lambda x: decoder(x).sdf.squeeze(), resolution=180)
                     mesh.apply_transform(scale_mat_inv)
                     mesh.export(os.path.join(out_dir, '%010d_mesh.ply' % it))
 
@@ -440,7 +426,7 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
                 checkpoint_io.save('model.pt', it=it)
             # Predicting the surface normals pass it on to rendering network
             pred_surface_grad = gradient(gt_surface_pts.clone(), lambda x: modelCombine.sdf_feature(x).sdf)
-
+            # pred_surface_grad = gradient(gt_surface_pts.clone(), lambda x:     decoder(x).sdf)
             # every once in a while update shape and points
             # sample points in space and on the shape
             # use iso points to weigh data points loss
@@ -452,19 +438,15 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
                     # if shape.points.shape[1]/iso_points.shape[1] < 1.0:
                     #     idx = fps(iso_points.view(-1,3), torch.zeros(iso_points.shape[1], dtype=torch.long, device=iso_points.device), shape.points.shape[1]/iso_points.shape[1])
                     #     iso_points = iso_points.view(-1,3)[idx].view(1,-1,3)
-                    print(f'shape of iso points {iso_points.shape} ')
-                    tempIso_points  = shape.get_iso_points(iso_points+0.01*(torch.rand_like(
-                        iso_points)-0.5), modelCombine.sdf_feature, ear=kwargs['ear'], 
-                        outlier_tolerance=kwargs['outlier_tolerance'])
+                    #print(f'shape of iso points {iso_points.shape} ')
+                    tempIso_points  = shape.get_iso_points(iso_points+0.01*(torch.rand_like(iso_points)-0.5), modelCombine.sdf_feature, ear=kwargs['ear'], outlier_tolerance=kwargs['outlier_tolerance'])
+                    #print(f'shape of iso points {iso_points.shape},shape of iso points after projection {tempIso_points.shape} ')
                     
-                    if tempIso_points.shape[1] <12:
-                        iso_points = shape.points
-                        tempIso_points  = shape.get_iso_points(iso_points+0.1*(torch.rand_like(
-                            iso_points)-0.5), modelCombine.sdf_feature, ear=kwargs['ear'], 
-                            outlier_tolerance=kwargs['outlier_tolerance'])
-
-
                     iso_points = tempIso_points.clone()
+                    # iso_points  = shape.get_iso_points(iso_points+0.1*(torch.rand_like(
+                    #     iso_points)-0.5), decoder, ear=kwargs['ear'], 
+                    #     outlier_tolerance=kwargs['outlier_tolerance'])
+                    
                     # iso_points = shape.get_iso_points(shape.points, decoder, ear=kwargs['ear'], outlier_tolerance=kwargs['outlier_tolerance'])
                     iso_points_normal = estimate_pointcloud_normals(iso_points.view(1,-1,3), 12, False)
                     if kwargs['denoise_normal']:
@@ -476,23 +458,21 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
                 
                 # TODO: use gradient from network or neighborhood?
                 iso_points_g = gradient(iso_points.clone(), lambda x: modelCombine.sdf_feature(x).sdf)
+                # iso_points_g = gradient(iso_points.clone(), lambda x: decoder(x).sdf)
                 if it == kwargs['warm_up'] or kwargs['resample_every'] > 0 and (it - 
                     kwargs['warm_up']) % 1000== 0:
-                    save_ply(os.path.join(out_dir, '%010d_iso.ply' % it), iso_points.cpu().detach().view(-1,3)*(scale/1.25) +pcenter, normals=iso_points_g.view(-1,3).detach().cpu())
+                    save_ply(os.path.join(out_dir, '%010d_iso.ply' % it), iso_points.cpu().detach().view(-1,3)*(scale/1.5) +pcenter, normals=iso_points_g.view(-1,3).detach().cpu())
 
                 if kwargs['weight_mode'] == 1:
-                    weights = get_iso_bilateral_weights(gt_surface_pts, gt_surface_normals, 
-                                    iso_points, iso_points_g).detach()
+                    weights = get_iso_bilateral_weights(gt_surface_pts, gt_surface_normals, iso_points, iso_points_g).detach()
                 elif kwargs['weight_mode'] == 2:
-                    weights = get_laplacian_weights(gt_surface_pts, gt_surface_normals, 
-                                    iso_points, iso_points_g).detach()
+                    weights = get_laplacian_weights(gt_surface_pts, gt_surface_normals, iso_points, iso_points_g).detach()
                 elif kwargs['weight_mode'] == 3:
-                    weights = get_heat_kernel_weights(gt_surface_pts, gt_surface_normals, 
-                                    iso_points, iso_points_g).detach()
+                    weights = get_heat_kernel_weights(gt_surface_pts, gt_surface_normals, iso_points, iso_points_g).detach()
 
                 if (it - kwargs['warm_up']) % 1000 == 0 and kwargs['weight_mode'] != -1:
                     print("min {:.4g}, max {:.4g}, std {:.4g}, mean {:.4g}".format(weights.min(), 
-                                weights.max(), weights.std(), weights.mean()))
+                            weights.max(), weights.std(), weights.mean()))
                     colors = scaler_to_color(1-weights.view(-1).cpu().numpy(), cmap='Reds')
                     #save_ply(os.path.join(out_dir, '%010d_batch_weight.ply' % it), (to_homogen(gt_surface_pts).cpu().detach().numpy() @ scale_mat_inv.T)[...,:3].reshape(-1,3),
                     #    colors=colors)
@@ -501,6 +481,7 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
                 iso_points_sampled = iso_points.detach()[:, sample_idx, :]
                 
                 iso_points_sdf = modelCombine.sdf_feature(iso_points_sampled.detach()).sdf
+                # iso_points_sdf = decoder(iso_points_sampled.detach()).sdf
                 loss_iso_points_sdf = iso_points_sdf.abs().mean()* kwargs['lambda_iso_sdf'] * iso_points_sdf.nelement() / (
                     iso_points_sdf.nelement()+8000)
                 loss['loss_sdf_iso'] = loss_iso_points_sdf.detach()
@@ -524,13 +505,16 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
             tmp = torch.index_select(gt_surface_pts, 1, idx)
             space_pts = torch.cat(
                 [torch.rand_like(tmp.repeat(1,3,1)) * 2 - 1,
-                 torch.randn_like(tmp.repeat(1,3,1), device=tmp.device, 
-                    dtype=tmp.dtype) * 0.2+tmp.repeat(1,3,1)], dim=1)
+                 torch.randn_like(tmp.repeat(1,3,1), device=tmp.device, dtype=tmp.dtype) * 0.2+tmp.repeat(1,3,1)], dim=1)
+            # space_pts = torch.cat(
+            #     [torch.rand_like(tmp.repeat(1,3,1)) * 2 - 1,
+            #      torch.randn_like(tmp.repeat(1,3,1), device=tmp.device, 
+            #         dtype=tmp.dtype) * 0.2+tmp.repeat(1,3,1)], dim=1)
            
             space_pts.requires_grad_(True)
             pred_space_sdf = modelCombine.sdf_feature(space_pts).sdf
-            pred_space_grad = torch.autograd.grad(pred_space_sdf, [space_pts], [
-                torch.ones_like(pred_space_sdf)], create_graph=True)[0]
+            # pred_space_sdf = decoder(space_pts).sdf
+            pred_space_grad = torch.autograd.grad(pred_space_sdf, [space_pts], [torch.ones_like(pred_space_sdf)], create_graph=True)[0]
 
             # 1. eikonal term
             loss_eikonal = (eikonal_loss(pred_surface_grad) +
@@ -541,7 +525,8 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
             # 2. SDF loss
             # loss on iso points
             pred_surface_sdf = modelCombine.sdf_feature(gt_surface_pts).sdf
-
+            # pred_surface_sdf = decoder(gt_surface_pts).sdf
+            
             loss_sdf = torch.mean(weights * pred_surface_sdf.abs()) * lambda_surface_sdf
             if kwargs['warm_up'] >= 0 and it >= kwargs['warm_up'] and kwargs['lambda_iso_sdf'] != 0:
                 # loss_sdf = 0.5 * loss_sdf
@@ -593,40 +578,44 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
             # 4. Complex Amplitude prediction
             # on surface points  - L2 loss
             
-            
+           
             pred_amplitudes_complex= modelCombine(gt_surface_pts,gt_viewVector)
-            loss_complexSurface = torch.mean(torch.sum((gt_surface_amps-pred_amplitudes_complex)**2,
-                dim=-1,keepdim=False),dim=-1)* lambda_surface_amps
-            loss['loss_complexSurface'] = loss_complexSurface
-            #print(loss['loss'])
-            #print(loss_complexSurface)
-            loss['loss'] += loss_complexSurface.squeeze(0)
+            loss_complexSurface = torch.mean(torch.sum(torch.abs(gt_surface_amps-pred_amplitudes_complex),
+                dim=-1,keepdim=False),dim=-1).squeeze()* lambda_surface_amps
+            loss['loss_complexSurface'] = loss_complexSurface.detach()
+
+            loss['loss'] += loss_complexSurface
             training_loss_amps = loss_complexSurface.detach().cpu().numpy()
-            # on surface iso-points -L1 loss forcing 0
-            v1 = -piTorch + 2*piTorch*torch.rand((1,iso_points.shape[1],1),device=device)
+            # # on surface iso-points -L1 loss forcing 0
+            
             e1 = torch.tensor(np.deg2rad(43.9219),device=device)
-            vVector1 = torch.cat( (torch.cos(v1)*torch.cos(-e1), torch.sin(v1)*torch.cos(-e1),
-                                  torch.ones((1,iso_points.shape[1],1),device=device)*torch.sin(-e1)),dim=-1)
-            pred_amplitudes_complexISO= modelCombine(iso_points,vVector1)
-            loss_complexSurfaceISO = torch.mean(torch.sum(torch.abs(pred_amplitudes_complexISO),
-                dim=-1,keepdim=False),dim=-1)* lambda_surfaceISO_amps
-            loss['loss_complexSurfaceISO'] = loss_complexSurfaceISO
-            loss['loss'] += loss_complexSurfaceISO.squeeze(0)            
-            training_loss_ampsISO = loss_complexSurfaceISO.detach().cpu().numpy()
-            # off surface iso-points -L1 loss forcing 0
+            if kwargs['warm_up'] >= 0 and it >= kwargs['warm_up']:
+                v1 = -piTorch + 2*piTorch*torch.rand((1,iso_points_sampled.shape[1],1),device=device)
+                
+                vVector1 = torch.cat( (torch.cos(v1)*torch.cos(-e1), torch.sin(v1)*torch.cos(-e1),
+                            torch.ones((1,iso_points_sampled.shape[1],1),device=device)*torch.sin(-e1)),dim=-1)
+                pred_amplitudes_complexISO= modelCombine(iso_points_sampled,vVector1)
+                loss_complexSurfaceISO = torch.mean(torch.sum(torch.abs(pred_amplitudes_complexISO),
+                    dim=-1,keepdim=False),dim=-1).squeeze()* lambda_surfaceISO_amps
+                loss['loss_complexSurfaceISO'] = loss_complexSurfaceISO.detach()
+                loss['loss'] += loss_complexSurfaceISO            
+                training_loss_ampsISO = loss_complexSurfaceISO.detach().cpu().numpy()
+                
+            # # off surface iso-points -L1 loss forcing 0
             v2 = -piTorch + 2*piTorch*torch.rand((1,space_pts.shape[1],1),device=device)
             vVector2 = torch.cat( (torch.cos(v2)*torch.cos(-e1), torch.sin(v2)*torch.cos(-e1),
                                   torch.ones((1,space_pts.shape[1],1),device=device)*torch.sin(-e1)),dim=-1)
             pred_amplitudes_complexOFF= modelCombine(space_pts,vVector2)
             loss_complexSurfaceOFF = torch.mean(torch.sum(torch.abs(pred_amplitudes_complexOFF),
-                dim=-1,keepdim=False),dim=-1)* lambda_surfaceOFF_amps
-            loss['loss_complexSurfaceOFF'] = loss_complexSurfaceOFF
-            loss['loss'] += loss_complexSurfaceOFF.squeeze(0)
+                dim=-1,keepdim=False)).squeeze()* lambda_surfaceOFF_amps
+            loss['loss_complexSurfaceOFF'] = loss_complexSurfaceOFF.detach()
+            loss['loss'] += loss_complexSurfaceOFF
             training_loss_ampsOFF = loss_complexSurfaceOFF.detach().cpu().numpy()       
             # Taking an optimization step
             loss['loss'].backward()
             torch.nn.utils.clip_grad_norm_(modelCombine.sdf_feature.parameters(), max_norm=1.)
             torch.nn.utils.clip_grad_norm_(modelCombine.renderingNetwork.parameters(), max_norm=1.)
+            # torch.nn.utils.clip_grad_norm_(decoder.parameters(), max_norm=1.)
             optimizer.step()
             scheduler.step()
             if it % 20 == 0:
@@ -689,30 +678,35 @@ if __name__ == '__main__':
     out_dir = '/research/nfs_ertin_1/nithin_data/3D_SAR/neuralImplicitSurfaceSAR/experiments/camry_angle_large_latent'
     resume = False
     warm_up = 500
-    ear = False
+    ear = True
     num_frequencies = 9
     totalIter = 30000
     use_off_normal_loss = True
     weight_mode = 1
-    resample_every = 1000
-    lam_eik = 8
-    isoSDF = 400
-    isoN = 100
-    onSDF = 4000
+    
+    
+    lam_eik = 18
+    isoSDF = 700
+    isoN = 70
+    onSDF = 5000
     outlier_tolerance = 0.1
     offSDF = 100
-    onN = 300
+    onN = 500
     offSal = 20
     denoise_normal = True
-    amps = 1000
-    amps_iso = 1000
-    amps_off = 1000
+    amps = 3400
+    amps_iso = 1500
+    amps_off = 1500
+    resample_every = 1000
+    lambda_surface_sdf_warmup = 5e2
+    lambda_surface_normal_warmup = 5e1
     run(mat_file, out_dir, decoder_type=decoder,
         use_sal_loss=use_sal_loss,resume=resume,use_off_normal_loss=use_off_normal_loss,
         warm_up=warm_up, weight_mode=weight_mode , resample_every=resample_every,
         ear=ear, lambda_eikonal=lam_eik, lambda_iso_sdf=isoSDF, lambda_iso_normal=isoN,
         lambda_surface_sdf=onSDF,lambda_inter_sdf=offSDF, lambda_surface_normal= onN,
         lambda_inter_sal=offSal,outlier_tolerance=outlier_tolerance,  denoise_normal=denoise_normal,
+        lambda_surface_sdf_warmup = lambda_surface_sdf_warmup, lambda_surface_normal_warmup=lambda_surface_normal_warmup,
         num_frequencies=num_frequencies,totalIter = totalIter,lambda_amps = amps,
         lambda_amps_iso = amps_iso,lambda_amps_off = amps_off
         )
