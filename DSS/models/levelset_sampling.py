@@ -156,6 +156,7 @@ class UniformProjection(LevelSetProjection):
             for sub_points in torch.split(points_packed, self.max_points_per_pass, dim=0):
                 net_input = sub_points
                 with autograd.enable_grad():
+                    net_input = net_input.detach()
                     net_input.detach_().requires_grad_(True)
                     network_eval = model.forward(
                         net_input, **forward_kwargs).sdf
@@ -325,7 +326,9 @@ class UniformProjection(LevelSetProjection):
             # print(time.time() - t0)
             curr_not_converged = curr_sdf.squeeze(
                 -1).abs() > proj_tolerance
-            not_converged[not_converged] = curr_not_converged
+            
+            idx = not_converged.detach().clone()
+            not_converged[idx] = curr_not_converged
             if (~not_converged).all() or it == proj_max_iters:
                 break
             it += 1
