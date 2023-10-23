@@ -72,10 +72,10 @@ class Shape(object):
         B, P, _ = points.shape
         assert(B==1)
         self.projection = UniformProjection(
-            proj_max_iters=10, proj_tolerance=1e-5, total_iters=10, sample_iters=5, knn_k=16)
+            proj_max_iters=10, proj_tolerance=1e-5, total_iters=1, sample_iters=5, knn_k=16)
         self.ear_projection = EdgeAwareProjection(proj_max_iters=10, knn_k=16,
-            proj_tolerance=1e-5, total_iters=10, resampling_clip=0.02, sample_iters=2, repulsion_mu=0.4,
-            sharpness_angle=20, edge_sensitivity=1.0,upsample_ratio=3.5)
+            proj_tolerance=1e-5, total_iters=1, resampling_clip=0.02, sample_iters=2, repulsion_mu=0.4,
+            sharpness_angle=20, edge_sensitivity=1.0,upsample_ratio=1.01)
         rnd_idx = torch.randperm(P)[:n_points]
         points = points.view(-1, 3)[rnd_idx].view(1, -1, 3)
         if normals is not None:
