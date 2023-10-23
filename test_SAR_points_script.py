@@ -337,8 +337,8 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
             decoder.train()
             loss = defaultdict(float)
 
-            lambda_surface_sdf = 1e3
-            lambda_surface_normal = 1e2
+            lambda_surface_sdf = 5e2
+            lambda_surface_normal = 5e1
             if kwargs['warm_up'] >= 0 and it >= kwargs['warm_up']:
                 lambda_surface_sdf = kwargs['lambda_surface_sdf']
                 lambda_surface_normal = kwargs['lambda_surface_normal']
