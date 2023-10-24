@@ -1,32 +1,20 @@
 # parameters used 
 # CV-Domes Full
-# --lambda_eikonal 3
+# --lambda_eikonal 15
 # --warm_up 500 
 # --resample_every 2000
-# --lambda_surface_sdf 4000 
-# --lambda_surface_normal 5
-# --lambda_iso_sdf 1000
-# --lambda_iso_normal 5
+# --lambda_surface_sdf 5000 
+# --lambda_surface_normal 500
+# --lambda_iso_sdf 100
+# --lambda_iso_normal 60
 # --lambda_inter_sdf 100
 # --denoise_normal
 # --use_off_normal_loss
-# --numberFrequencyFeatures 8
+# --numberFrequencyFeatures 10
 # --totalIter 30000
 
 
-# Gotcha Parking Lot full 
-# --lambda_eikonal 7
-# --warm_up 500 
-# --resample_every 1000
-# --lambda_surface_sdf 1200 
-# --lambda_surface_normal 20
-# --lambda_iso_sdf 200
-# --lambda_iso_normal 5
-# --lambda_inter_sdf 100
-# --denoise_normal
-# --use_off_normal_loss
-# --numberFrequencyFeatures 7 
-# --totalIter 135000
+
 import torch
 from DSS.core.cloud import PointClouds3D
 import os
@@ -267,7 +255,7 @@ def run(pointcloud_path, out_dir, decoder_type='siren',
             "out_dims": {'sdf': 1},
             "c_dim": 0,
             "hidden_size": 512,
-            'n_layers': 9,
+            'n_layers': 10,
             'bias': 1.0,
             "num_frequencies": num_frequencies,
         }

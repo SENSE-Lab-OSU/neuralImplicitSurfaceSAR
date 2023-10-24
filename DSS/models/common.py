@@ -302,7 +302,7 @@ class SDF(BaseModel):
             if l < self.num_layers - 2:
                 x = self.softplus(x)
 
-        x = F.tanh(x)
+        x = torch.tanh(x)
         results = self._parse_output(x, scale_rgb=False)
         if results.rgb is not None:
             results = results._replace(rgb=torch.sigmoid(results.rgb))
