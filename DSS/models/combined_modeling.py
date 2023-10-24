@@ -465,10 +465,15 @@ class Model(ImplicitModel, PointModel):
                          project=False, debug_name_prefix='',
                          **kwargs):
         if points is None:
-            if cameras := kwargs.get('cameras', None):
+            cameras = kwargs.get('cameras', None)
+            if cameras :
                 points = self.points.view(1, -1, 3)
             else:
                 points = self._points.points_padded()
+            # if cameras := kwargs.get('cameras', None):
+            #     points = self.points.view(1, -1, 3)
+            # else:
+            #     points = self._points.points_padded()
 
             mask = None
 
