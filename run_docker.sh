@@ -1,10 +1,10 @@
 #!/bin/bash
 
 MOUNT_OPS="-v $(pwd):/workspace"
-OPTS=""
+OPTS="--shm-size='32g'"
 
 IMAGE="complex_sar"
-REMOTE_IMAGE="agilemelon/complex_sar:base-torch1.13-cuda11.6"
+REMOTE_IMAGE="agilemelon/complex_sar:base-torch1.6-cuda10.1"
 
 
 if [ $# -eq 0 ]; then

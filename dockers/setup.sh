@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# install FRNN
-cd /user-app/FRNN/external/prefix_sum && pip install .
-cd /user-app/FRNN && pip install -e .
+# pytorch3d
+# pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
 
-# # install torch-batch-svd
-# cd /workspace/torch-batch-svd && python setup.py install
+# FRNN
+cd /user-app/FRNN/external/prefix_sum && pip install .
+cd /user-app/FRNN/ && pip install -e .
