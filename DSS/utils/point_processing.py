@@ -488,12 +488,19 @@ def farthest_sampling(point_clouds: PointClouds3D, ratio: float) -> PointClouds3
                  for b in range(len(point_clouds))]
     sampled_point_clouds = point_clouds.__class__(point_lst)
 
-    if (normals_packed := point_clouds.normals_packed()) is not None:
+    # if (normals_packed := point_clouds.normals_packed()) is not None:
+    #     normals_packed = normals_packed[fps_idx]
+    #     sampled_point_clouds.update_normals_(normals_packed)
+    normals_packed = point_clouds.normals_packed()
+    if normals_packed is not None:
         normals_packed = normals_packed[fps_idx]
         sampled_point_clouds.update_normals_(normals_packed)
 
-    if (features_packed := point_clouds.features_packed()) is not None:
+    # if (features_packed := point_clouds.features_packed()) is not None:
+    #     features_packed = features_packed[fps_idx]
+    #     sampled_point_clouds.update_features_(features_packed)
+    features_packed = point_clouds.features_packed()
+    if features_packed is not None:
         features_packed = features_packed[fps_idx]
         sampled_point_clouds.update_features_(features_packed)
-
     return sampled_point_clouds

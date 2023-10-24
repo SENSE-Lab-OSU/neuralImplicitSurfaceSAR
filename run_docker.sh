@@ -1,7 +1,7 @@
 #!/bin/bash
 
 MOUNT_OPS="-v $(pwd):/workspace"
-OPTS="--shm-size='32g'"
+OPTS="--shm-size=32g"
 
 IMAGE="complex_sar"
 REMOTE_IMAGE="agilemelon/complex_sar:base-torch1.6-cuda10.1"
