@@ -48,7 +48,7 @@ conda activate DSS
 conda install https://anaconda.org/brown-data-science/gcc/5.4.0/download/linux-64/gcc-5.4.0-0.tar.bz2
 cd ~/miniconda3/envs/DSS/lib
 # Find the latest c++ lib
-ls ~/miniconda3/envs/DSS3/lib | grep libstdc++.so
+ls ~/miniconda3/envs/DSS/lib | grep libstdc++.so
 # backup the libstc++
 mv libstdc++.so libstdc++.so.bak
 # link the latest file
